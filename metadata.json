@@ -1,0 +1,8 @@
+{
+  "name": "ITS Uíge Connect",
+  "description": "Educational platform for the 10th grade at the Instituto Técnico de Saúde do Uíge, featuring AI summaries, chat, library, and grade management.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
