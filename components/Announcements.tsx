@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { User, UserRole, Announcement } from '../types';
 import { MOCK_TURMAS } from '../constants';
+import { db } from '../services/supabase';
 
 interface AnnouncementsProps {
   user: User;
@@ -16,13 +17,12 @@ const Announcements: React.FC<AnnouncementsProps> = ({ user, announcements, onUp
     message: '',
     priority: 'NORMAL' as Announcement['priority'],
     targetTurma: 'ALL',
-    type: 'AVISO' // 'AVISO' or 'TEMA'
+    type: 'AVISO'
   });
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newAnn: Announcement = {
-      id: Date.now().toString(),
+    const newAnn: any = {
       title: formData.title,
       message: formData.message,
       senderId: user.id,
@@ -30,19 +30,20 @@ const Announcements: React.FC<AnnouncementsProps> = ({ user, announcements, onUp
       priority: formData.priority,
       targetTurmas: [formData.targetTurma],
       createdAt: new Date().toISOString(),
-      readBy: []
+      readBy: [],
+      type: formData.type
     };
-    onUpdate([newAnn, ...announcements]);
-    setShowCreate(false);
-    setFormData({ title: '', message: '', priority: 'NORMAL', targetTurma: 'ALL', type: 'AVISO' });
+
+    const { data, error } = await db.announcements.insert(newAnn);
+    if (!error) {
+      onUpdate([{ ...newAnn, id: Date.now().toString() }, ...announcements]);
+      setShowCreate(false);
+      setFormData({ title: '', message: '', priority: 'NORMAL', targetTurma: 'ALL', type: 'AVISO' });
+    }
   };
 
   const markAsRead = (id: string) => {
-    if (user.role === UserRole.ALUNO) {
-      onUpdate(announcements.map(ann => 
-        ann.id === id ? { ...ann, readBy: [...new Set([...ann.readBy, user.id])] } : ann
-      ));
-    }
+    // Local read marking could be added to DB if needed
   };
 
   const priorityColors = {
@@ -65,9 +66,9 @@ const Announcements: React.FC<AnnouncementsProps> = ({ user, announcements, onUp
         {user.role === UserRole.PROFESSOR && (
           <button 
             onClick={() => setShowCreate(!showCreate)}
-            className="bg-blue-600 text-white px-6 py-3 rounded-2xl text-sm font-bold shadow-xl hover:bg-blue-700 transition-all flex items-center space-x-2"
+            className="bg-blue-600 text-white px-6 py-3 rounded-2xl text-sm font-bold shadow-xl hover:bg-blue-700 transition-all"
           >
-            <span>{showCreate ? '✕ Cancelar' : '+ Publicar Conteúdo'}</span>
+            {showCreate ? '✕ Cancelar' : '+ Publicar Conteúdo'}
           </button>
         )}
       </header>
@@ -76,90 +77,37 @@ const Announcements: React.FC<AnnouncementsProps> = ({ user, announcements, onUp
         <form onSubmit={handleCreate} className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 animate-slideDown space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">Título do Conteúdo / Tema</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">Título do Conteúdo</label>
               <input 
                 required
                 type="text"
                 value={formData.title}
                 onChange={e => setFormData({...formData, title: e.target.value})}
-                placeholder="Ex: Resumo sobre Sistema Nervoso"
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">Turma de Destino</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button 
-                  type="button"
-                  onClick={() => setFormData({...formData, targetTurma: 'ALL'})}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${formData.targetTurma === 'ALL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-400 border-slate-200'}`}
-                >
-                  TODAS (GERAL)
-                </button>
-                {MOCK_TURMAS.map(t => (
-                  <button 
-                    key={t}
-                    type="button"
-                    onClick={() => setFormData({...formData, targetTurma: t})}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${formData.targetTurma === t ? 'bg-slate-800 text-white border-slate-800' : 'bg-slate-50 text-slate-400 border-slate-200'}`}
-                  >
-                    TURMA {t}
-                  </button>
-                ))}
-              </div>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">Turma</label>
+              <select 
+                value={formData.targetTurma}
+                onChange={e => setFormData({...formData, targetTurma: e.target.value})}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl"
+              >
+                <option value="ALL">TODAS</option>
+                {MOCK_TURMAS.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
             </div>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">Tipo de Publicação</label>
-              <div className="flex space-x-3">
-                <button 
-                  type="button"
-                  onClick={() => setFormData({...formData, type: 'AVISO'})}
-                  className={`flex-1 py-3 rounded-xl text-xs font-bold border transition-all ${formData.type === 'AVISO' ? 'bg-white border-blue-200 text-blue-600 shadow-sm' : 'bg-slate-50 text-slate-400'}`}
-                >
-                  📢 AVISO OFICIAL
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setFormData({...formData, type: 'TEMA'})}
-                  className={`flex-1 py-3 rounded-xl text-xs font-bold border transition-all ${formData.type === 'TEMA' ? 'bg-white border-green-200 text-green-600 shadow-sm' : 'bg-slate-50 text-slate-400'}`}
-                >
-                  📖 TEMA DE ESTUDO
-                </button>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">Prioridade (Apenas para Avisos)</label>
-              <div className="flex space-x-2">
-                {['NORMAL', 'IMPORTANT', 'URGENT'].map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setFormData({...formData, priority: p as Announcement['priority']})}
-                    className={`flex-1 py-3 rounded-xl text-[10px] font-bold border transition-all ${formData.priority === p ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
           <div className="space-y-2">
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">Mensagem ou Conteúdo Detalhado</label>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">Mensagem Detalhada</label>
             <textarea 
-              required
-              rows={5}
+              required rows={5}
               value={formData.message}
               onChange={e => setFormData({...formData, message: e.target.value})}
-              placeholder="Escreve aqui o comunicado ou o resumo do tema que queres partilhar..."
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500"
             ></textarea>
           </div>
-          
-          <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-lg hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 uppercase tracking-widest">
+          <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-lg hover:bg-blue-700 shadow-xl">
             Publicar Agora 🚀
           </button>
         </form>
@@ -168,57 +116,28 @@ const Announcements: React.FC<AnnouncementsProps> = ({ user, announcements, onUp
       <div className="space-y-6">
         {announcements.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-3xl border border-slate-100 border-dashed">
-            <span className="text-5xl block mb-4">📭</span>
-            <p className="text-slate-400 font-medium italic">Nenhum conteúdo partilhado até ao momento.</p>
+            <p className="text-slate-400 font-medium italic">Nenhum conteúdo partilhado.</p>
           </div>
         ) : (
-          announcements.map(ann => {
-            const isTopic = ann.title.toLowerCase().includes('tema') || ann.message.length > 200;
-            return (
-              <div 
-                key={ann.id} 
-                onClick={() => markAsRead(ann.id)}
-                className={`bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:border-blue-200 transition-all cursor-pointer relative overflow-hidden ${!ann.readBy.includes(user.id) && user.role === UserRole.ALUNO ? 'ring-2 ring-blue-500 ring-offset-4' : ''}`}
-              >
-                <div className="flex justify-between items-start mb-6">
-                  <div className="flex items-center space-x-4">
-                    <div className={`w-12 h-12 ${isTopic ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'} rounded-2xl flex items-center justify-center text-xl font-black shadow-inner`}>
-                      {ann.senderName.charAt(0)}
-                    </div>
-                    <div>
-                      <h4 className="font-black text-slate-800 uppercase text-xs tracking-widest">{ann.senderName}</h4>
-                      <p className="text-[10px] text-slate-400 font-bold mt-0.5">{new Date(ann.createdAt).toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter border ${priorityColors[ann.priority]}`}>
-                      {ann.priority}
-                    </span>
-                    {isTopic && <span className="bg-green-600 text-white px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter">TEMA</span>}
+          announcements.map(ann => (
+            <div key={ann.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black">{ann.senderName.charAt(0)}</div>
+                  <div>
+                    <h4 className="font-black text-slate-800 uppercase text-[10px] tracking-widest">{ann.senderName}</h4>
+                    <p className="text-[9px] text-slate-400">{new Date(ann.createdAt).toLocaleDateString()}</p>
                   </div>
                 </div>
-                
-                <h3 className="text-xl font-black text-slate-900 mb-3">{ann.title}</h3>
-                <div className="prose prose-slate max-w-none">
-                  <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">{ann.message}</p>
-                </div>
-                
-                <div className="flex items-center justify-between mt-8 pt-4 border-t border-slate-50">
-                  <div className="flex items-center space-x-4 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    <span className="flex items-center"><span className="mr-1">🎯</span> {ann.targetTurmas[0] === 'ALL' ? 'Geral' : `Turma ${ann.targetTurmas[0]}`}</span>
-                    {user.role === UserRole.PROFESSOR && (
-                      <span className="text-blue-500 flex items-center"><span className="mr-1">👁️</span> {ann.readBy.length} Visualizações</span>
-                    )}
-                  </div>
-                  {user.role === UserRole.ALUNO && (
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${ann.readBy.includes(user.id) ? 'text-green-500' : 'text-orange-500 animate-pulse'}`}>
-                      {ann.readBy.includes(user.id) ? '✓ Visto' : '🆕 Novo'}
-                    </span>
-                  )}
-                </div>
+                <span className={`px-2 py-1 rounded-full text-[8px] font-black tracking-widest border ${priorityColors[ann.priority]}`}>{ann.priority}</span>
               </div>
-            );
-          })
+              <h3 className="text-lg font-black text-slate-900 mb-2">{ann.title}</h3>
+              <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">{ann.message}</p>
+              <div className="mt-4 pt-4 border-t border-slate-50 flex items-center text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                <span>🎯 {ann.targetTurmas[0] === 'ALL' ? 'Geral' : `Turma ${ann.targetTurmas[0]}`}</span>
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>

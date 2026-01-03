@@ -11,7 +11,8 @@ export interface User {
   role: UserRole;
   turma?: string;
   assignedTurmas?: string[]; // For Professors
-  status?: 'PENDING' | 'APPROVED';
+  // Fix: Added 'BANNED' to allowed status types
+  status?: 'PENDING' | 'APPROVED' | 'BANNED';
 }
 
 export interface Subject {
